@@ -28,6 +28,6 @@ impl Source for SourceFile {
         let temp = unsafe { std::str::from_utf8_unchecked(&buf[..buf.len() - 1]) };
         let temp: u32 = temp.parse()?;
 
-        Ok(Temperature::from_celcius(temp as f32 / 1000.0))
+        Ok(Temperature::from_celsius(temp as f32 / 1000.0))
     }
 }

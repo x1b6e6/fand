@@ -11,11 +11,11 @@ pub use nvidia::SourceNvidia;
 pub struct Temperature(f32);
 
 impl Temperature {
-    pub fn from_celcius(value: f32) -> Self {
+    pub fn from_celsius(value: f32) -> Self {
         Self(value)
     }
 
-    pub fn celcius(self) -> f32 {
+    pub fn celsius(self) -> f32 {
         self.0
     }
 }

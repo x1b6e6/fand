@@ -108,11 +108,11 @@ impl Sources {
             match value {
                 CachedResult::Cached(temperature) => {
                     debug!("using cached value for {name}: {temperature:8}");
-                    ret.set_double(temperature.celcius() as f64);
+                    ret.set_double(temperature.celsius() as f64);
                 }
                 CachedResult::Some(temperature) => {
                     debug!("{name}: {temperature:8}");
-                    ret.set_double(temperature.celcius() as f64);
+                    ret.set_double(temperature.celsius() as f64);
                 }
                 CachedResult::Err(err) => {
                     error!("{err:?}");

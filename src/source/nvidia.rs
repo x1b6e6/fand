@@ -150,7 +150,7 @@ impl SourceNvidia {
 impl Source for SourceNvidia {
     fn value(&self) -> Result<Temperature, Box<dyn Error>> {
         let temp = self.dev.temp()?;
-        Ok(Temperature::from_celcius(temp as f32))
+        Ok(Temperature::from_celsius(temp as f32))
     }
 }
 
