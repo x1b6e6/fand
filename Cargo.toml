@@ -1,0 +1,16 @@
+[package]
+name = "fand"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+clap = { version = "4.3.3", features = ["derive"] }
+deno_core = "0.234.0"
+dlopen = "0.1.8"
+dlopen_derive = "0.1.4"
+env_logger = "0.10.1"
+log = "0.4.20"
+serde = { version = "1.0.193", features = ["derive"] }
+toml = "0.8.8"
