@@ -7,6 +7,7 @@ pub use file::SourceFile;
 pub use nvidia::SourceNvidia;
 
 /// temperature
+#[derive(Clone, Copy)]
 pub struct Temperature(f32);
 
 impl Temperature {

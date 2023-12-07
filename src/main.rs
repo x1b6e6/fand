@@ -68,5 +68,6 @@ fn main() {
             fan.as_ref().borrow_mut().write(power).unwrap();
         }
         std::thread::sleep(interval);
+        computed::cache_invalidate();
     }
 }

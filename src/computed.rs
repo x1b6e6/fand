@@ -1,7 +1,13 @@
-use crate::{fan::FanPower, source::Source};
+use crate::{
+    fan::FanPower,
+    source::{Source, Temperature},
+};
 use deno_core::{v8, Extension, FastString, JsRuntime, RuntimeOptions};
 use log::{debug, error, trace};
-use std::{collections::HashMap, convert::Infallible, mem::MaybeUninit, rc::Rc};
+use std::{
+    cell::RefCell, collections::HashMap, convert::Infallible, error::Error, mem::MaybeUninit,
+    rc::Rc,
+};
 
 pub struct Computed {
     formula: String,
@@ -11,6 +17,13 @@ struct Sources {
     inited: bool,
     js: MaybeUninit<JsRuntime>,
     sources: MaybeUninit<Rc<HashMap<String, Rc<dyn Source>>>>,
+    cache: RefCell<MaybeUninit<HashMap<String, Temperature>>>,
+}
+
+enum CachedResult<T, E> {
+    Some(T),
+    Cached(T),
+    Err(E),
 }
 
 static mut INSTANCE: Sources = Sources::null();
@@ -21,6 +34,7 @@ impl Sources {
             inited: false,
             js: MaybeUninit::uninit(),
             sources: MaybeUninit::uninit(),
+            cache: RefCell::new(MaybeUninit::uninit()),
         }
     }
 
@@ -31,6 +45,35 @@ impl Sources {
 
     pub fn is_null(&self) -> bool {
         !self.inited
+    }
+
+    pub fn cache_invalidate(&mut self) {
+        unsafe { self.cache.borrow_mut().assume_init_mut() }.clear()
+    }
+
+    pub fn value(&self, name: &str) -> Option<CachedResult<Temperature, Box<dyn Error>>> {
+        let cache = self.cache.borrow();
+        let cached = unsafe { cache.assume_init_ref() }.get(name);
+        if let Some(&temperature) = cached {
+            return Some(CachedResult::Cached(temperature));
+        }
+
+        drop(cache);
+
+        let source = unsafe { self.sources.assume_init_ref() }.get(name);
+        if let Some(source) = source {
+            let result = source.value();
+            match result {
+                Ok(temperature) => {
+                    unsafe { self.cache.borrow_mut().assume_init_mut() }
+                        .insert(name.to_string(), temperature);
+                    Some(CachedResult::Some(temperature))
+                }
+                Err(err) => Some(CachedResult::Err(err)),
+            }
+        } else {
+            None
+        }
     }
 
     fn check(&self) {
@@ -48,6 +91,7 @@ impl Sources {
             }],
             ..Default::default()
         }));
+        self.cache.borrow_mut().write(HashMap::new());
         self.inited = true;
     }
 
@@ -58,18 +102,20 @@ impl Sources {
         mut ret: v8::ReturnValue,
     ) {
         let name = name.to_rust_string_lossy(scope);
-        let source = unsafe { INSTANCE.sources.assume_init_ref() }.get(&name);
-        if let Some(source) = source {
-            trace!("accessing {name}");
-            match source.as_ref().value() {
-                Ok(value) => {
-                    let value = value.celcius();
-                    debug!("{name}: {value}");
-                    ret.set_double(value as f64);
+        trace!("accessing {name}");
+        let value = unsafe { INSTANCE.value(&name) };
+        if let Some(value) = value {
+            match value {
+                CachedResult::Cached(temperature) => {
+                    debug!("using cached value for {name}: {temperature:8}");
+                    ret.set_double(temperature.celcius() as f64);
                 }
-                Err(e) => {
-                    error!("{name}: {:?}", e);
-                    ret.set_undefined();
+                CachedResult::Some(temperature) => {
+                    debug!("{name}: {temperature:8}");
+                    ret.set_double(temperature.celcius() as f64);
+                }
+                CachedResult::Err(err) => {
+                    error!("{err:?}");
                 }
             }
         }
@@ -81,6 +127,10 @@ impl Sources {
             value.set_accessor(scope, name.into(), Self::accessor);
         }
     }
+}
+
+pub fn cache_invalidate() {
+    unsafe { INSTANCE.cache_invalidate() };
 }
 
 impl Computed {
@@ -107,9 +157,10 @@ impl Computed {
         let result = result.into_raw();
         let result = unsafe { result.as_ref() }.to_number(&mut scope).unwrap();
         let result = result.integer_value(&mut scope).unwrap();
+        let power = FanPower::from(result as u8);
 
-        debug!("result: {result}");
+        debug!("power: {power:7.2}");
 
-        Ok(FanPower::from(result as u8))
+        Ok(power)
     }
 }

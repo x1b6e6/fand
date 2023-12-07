@@ -4,6 +4,8 @@ mod pwm;
 
 pub use pwm::FanPwm;
 
+/// power of fan
+#[derive(Clone, Copy)]
 pub struct FanPower(u8);
 
 pub trait Fan {
