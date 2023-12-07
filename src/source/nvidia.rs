@@ -6,11 +6,6 @@ use std::{error::Error, ffi::CStr, mem::MaybeUninit, str::FromStr};
 #[repr(C)]
 struct NvidiaDeviceHandle(*const ());
 
-struct NvidiaDevice {
-    api: &'static Container<NvidiaApi>,
-    handle: NvidiaDeviceHandle,
-}
-
 #[derive(WrapperApi)]
 pub struct NvidiaApi {
     #[dlopen_name = "nvmlInit_v2"]
@@ -40,7 +35,7 @@ pub struct NvidiaApi {
 
 struct Nvidia {
     api: Container<NvidiaApi>,
-    devices: Vec<NvidiaDevice>,
+    devices: Vec<NvidiaDeviceHandle>,
 }
 
 fn nvidia() -> &'static Nvidia {
@@ -77,12 +72,7 @@ fn nvidia() -> &'static Nvidia {
                 panic!("{:?}", NvidiaError::from_nvidia(&nvidia.api, ret));
             }
 
-            let dev = NvidiaDevice {
-                api: &nvidia.api,
-                handle: handle,
-            };
-
-            nvidia.devices.push(dev);
+            nvidia.devices.push(handle);
         }
     }
 
@@ -90,7 +80,7 @@ fn nvidia() -> &'static Nvidia {
 }
 
 pub struct SourceNvidia {
-    dev: &'static NvidiaDevice,
+    dev: NvidiaDeviceHandle,
 }
 
 #[derive(Debug)]
@@ -108,7 +98,10 @@ pub enum SourceNvidiaError {
 }
 
 impl Nvidia {
-    fn find_device(&self, filter: impl Fn(&NvidiaDevice) -> bool) -> Option<&NvidiaDevice> {
+    fn find_device(
+        &self,
+        filter: impl Fn(&NvidiaDeviceHandle) -> bool,
+    ) -> Option<&NvidiaDeviceHandle> {
         self.devices.iter().find(|dev| filter(*dev))
     }
 }
@@ -138,7 +131,7 @@ impl SourceNvidia {
             (None, None) => nvidia.devices.first().ok_or(SourceNvidiaError::NoDevices),
         };
 
-        let dev = dev?;
+        let dev = *dev?;
 
         Ok(Self { dev })
     }
@@ -165,27 +158,26 @@ impl NvidiaDeviceHandle {
     fn null() -> Self {
         Self(std::ptr::null())
     }
-}
 
-impl NvidiaDevice {
     fn name(&self) -> Result<String, NvidiaError> {
         let mut buf = [0u8; 4096];
-        let ret = self
-            .api
-            .device_get_name(self.handle, &mut buf as *mut u8, 4096);
+        let api = &nvidia().api;
+        let ret = api.device_get_name(*self, &mut buf as *mut u8, 4096);
         if ret != 0 {
-            return Err(NvidiaError::from_nvidia(&self.api, ret));
+            return Err(NvidiaError::from_nvidia(api, ret));
         }
 
         let name = CStr::from_bytes_until_nul(&buf).unwrap();
+
         Ok(String::from_str(name.to_str().unwrap()).unwrap())
     }
 
     fn board_id(&self) -> Result<u32, NvidiaError> {
         let mut id = 0;
-        let ret = self.api.device_get_board_id(self.handle, &mut id);
+        let api = &nvidia().api;
+        let ret = api.device_get_board_id(*self, &mut id);
         if ret != 0 {
-            return Err(NvidiaError::from_nvidia(&self.api, ret));
+            return Err(NvidiaError::from_nvidia(api, ret));
         }
 
         Ok(id)
@@ -193,9 +185,10 @@ impl NvidiaDevice {
 
     fn temp(&self) -> Result<u32, NvidiaError> {
         let mut temp = 0;
-        let ret = self.api.device_get_temperature(self.handle, 0, &mut temp);
+        let api = &nvidia().api;
+        let ret = api.device_get_temperature(*self, 0, &mut temp);
         if ret != 0 {
-            return Err(NvidiaError::from_nvidia(&self.api, ret));
+            return Err(NvidiaError::from_nvidia(api, ret));
         }
 
         Ok(temp)
