@@ -1,4 +1,4 @@
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
 use std::{
     collections::HashMap,
     fs, io,
@@ -43,8 +43,23 @@ pub struct ConfigFan {
 
 #[derive(Debug, PartialEq, Eq, Deserialize)]
 pub struct ConfigMain {
-    #[serde(default)]
+    #[serde(default = "ConfigMain::interval_default")]
+    #[serde(deserialize_with = "ConfigMain::interval_deserialize")]
     pub interval: Duration,
+}
+
+impl ConfigMain {
+    fn interval_default() -> Duration {
+        Duration::from_secs(2)
+    }
+
+    fn interval_deserialize<'de, D>(d: D) -> Result<Duration, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = Deserialize::deserialize(d)?;
+        Ok(Duration::from_secs(value))
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Deserialize)]
