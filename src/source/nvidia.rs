@@ -1,5 +1,6 @@
 use super::{Source, Temperature};
 use dlopen::wrapper::{Container, WrapperApi};
+use log::error;
 use std::{error::Error, ffi::CStr, mem::MaybeUninit, str::FromStr};
 
 #[derive(Clone, Copy)]
@@ -103,6 +104,15 @@ impl Nvidia {
         filter: impl Fn(&NvidiaDeviceHandle) -> bool,
     ) -> Option<&NvidiaDeviceHandle> {
         self.devices.iter().find(|dev| filter(*dev))
+    }
+}
+
+impl Drop for Nvidia {
+    fn drop(&mut self) {
+        let ret = self.api.deinit();
+        if ret != 0 {
+            error!("{:?}", self.api.error_string(ret));
+        }
     }
 }
 
