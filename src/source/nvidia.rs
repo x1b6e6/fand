@@ -46,7 +46,7 @@ fn nvidia() -> &'static Nvidia {
 
     if unsafe { !NVIDIA.0 } {
         let api: Container<NvidiaApi> =
-            unsafe { Container::load("libnvidia-ml.so") }.expect("load libnvidia-ml.so");
+            unsafe { Container::load("libnvidia-ml.so") }.expect("loading libnvidia-ml.so");
 
         let ret = api.init();
         if ret != 0 {
