@@ -156,8 +156,10 @@ impl Computed {
         let mut scope = js.handle_scope();
         let result = result.into_raw();
         let result = unsafe { result.as_ref() }.to_number(&mut scope).unwrap();
-        let result = result.integer_value(&mut scope).unwrap();
-        let power = FanPower::from(result as u8);
+        let power = result.value();
+        let power = f64::min(f64::max(0.0, power), 1.0);
+        let power = (power * 255.0) as u8;
+        let power = FanPower::from(power);
 
         debug!("power: {power:7.2}");
 
