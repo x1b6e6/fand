@@ -8,7 +8,7 @@ use crate::{
 };
 use clap::Parser as _;
 use computed::Computed;
-use config::{ConfigFan, ConfigMain};
+use config::{ConfigFan, ConfigMain, ConfigNvidiaFilter};
 use std::{cell::RefCell, collections::HashMap, path::PathBuf, rc::Rc, str::FromStr as _};
 
 mod cli;
@@ -40,9 +40,9 @@ fn main() {
         .map(|(name, source)| {
             let source: Rc<dyn Source> = match source {
                 ConfigSourceValue::File { path } => Rc::new(SourceFile::new(path).unwrap()),
-                ConfigSourceValue::Nvidia { name, index } => {
-                    Rc::new(SourceNvidia::new(name, index).unwrap())
-                }
+                ConfigSourceValue::Nvidia {
+                    filter: ConfigNvidiaFilter { name, index },
+                } => Rc::new(SourceNvidia::new(name, index).unwrap()),
             };
             (name, source)
         })

@@ -9,6 +9,12 @@ use std::{
 #[derive(Debug, PartialEq, Eq, Deserialize)]
 pub struct Milliseconds(u64);
 
+#[derive(Debug, Default, PartialEq, Eq, Deserialize)]
+pub struct ConfigNvidiaFilter {
+    pub name: Option<String>,
+    pub index: Option<u32>,
+}
+
 #[derive(Debug, PartialEq, Eq, Deserialize)]
 #[serde(tag = "type")]
 pub enum ConfigSourceValue {
@@ -16,8 +22,8 @@ pub enum ConfigSourceValue {
     File { path: PathBuf },
     #[serde(rename = "nvidia")]
     Nvidia {
-        name: Option<String>,
-        index: Option<u32>,
+        #[serde(default)]
+        filter: ConfigNvidiaFilter,
     },
 }
 
@@ -90,7 +96,7 @@ impl Default for Milliseconds {
 mod test {
     use std::{path::PathBuf, time::Duration};
 
-    use crate::config::{Config, ConfigFanTarget, ConfigSourceValue};
+    use crate::config::{Config, ConfigFanTarget, ConfigNvidiaFilter, ConfigSourceValue};
 
     #[test]
     fn parse() {
@@ -105,6 +111,10 @@ path = "/value"
 [source.s2]
 type = "nvidia"
 
+[source.s3]
+type = "nvidia"
+filter = { name = "my nvidia" }
+
 [[fan]]
 type = "pwm"
 value = "s3"
@@ -112,7 +122,7 @@ path = "/pwm"
 "#;
         let config: Config = toml::from_str(CONF).unwrap();
 
-        assert_eq!(config.sources.len(), 2);
+        assert_eq!(config.sources.len(), 3);
         assert_eq!(config.fans.len(), 1);
 
         assert_eq!(config.main.interval, Duration::from_secs(123));
@@ -129,8 +139,21 @@ path = "/pwm"
         assert_eq!(
             config.sources["s2"],
             ConfigSourceValue::Nvidia {
-                name: None,
-                index: None
+                filter: ConfigNvidiaFilter {
+                    name: None,
+                    index: None
+                }
+            }
+        );
+
+        assert!(config.sources.contains_key("s3"));
+        assert_eq!(
+            config.sources["s3"],
+            ConfigSourceValue::Nvidia {
+                filter: ConfigNvidiaFilter {
+                    name: Some("my nvidia".to_owned()),
+                    index: None
+                }
             }
         );
 
