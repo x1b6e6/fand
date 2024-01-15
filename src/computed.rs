@@ -3,7 +3,7 @@ use crate::{
     source::{Source, Temperature},
 };
 use deno_core::{v8, Extension, FastString, JsRuntime, RuntimeOptions};
-use log::{debug, error, trace};
+use log::{debug, error, trace, warn};
 use std::{
     cell::RefCell, collections::HashMap, convert::Infallible, error::Error, mem::MaybeUninit,
     rc::Rc,
@@ -155,10 +155,16 @@ impl Computed {
 
         let mut scope = js.handle_scope();
         let result = result.into_raw();
-        let result = unsafe { result.as_ref() }.to_number(&mut scope).unwrap();
-        let power = result.value();
-        let power = f64::min(f64::max(0.0, power), 1.0);
-        let power = (power * 255.0) as u8;
+        let result = unsafe { result.as_ref() };
+        let power = if !result.is_number() {
+            warn!("{result:?} is not a number. Set full speed.");
+            255
+        } else {
+            let power = result.to_number(&mut scope).unwrap();
+            let power = power.value();
+            let power = f64::min(f64::max(0.0, power), 1.0);
+            (power * 255.0) as _
+        };
         let power = FanPower::from(power);
 
         debug!("power: {power:7.2}");
