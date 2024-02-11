@@ -9,7 +9,7 @@ use crate::{
 use clap::Parser as _;
 use computed::Computed;
 use config::{ConfigFan, ConfigMain, ConfigNvidiaFilter};
-use std::{cell::RefCell, collections::HashMap, path::PathBuf, rc::Rc, str::FromStr as _};
+use std::{cell::RefCell, collections::HashMap, env, path::PathBuf, rc::Rc, str::FromStr as _};
 
 mod cli;
 mod computed;
@@ -18,6 +18,9 @@ mod fan;
 mod source;
 
 fn main() {
+    if env::var("RUST_LOG").is_err() {
+        env::set_var("RUST_LOG", "info")
+    }
     env_logger::init();
 
     let app = cli::App::parse();
