@@ -1,6 +1,6 @@
 use super::{Source, Temperature};
 use dlopen::wrapper::{Container, WrapperApi};
-use log::error;
+use log::{error, info};
 use std::{error::Error, ffi::CStr, fmt, mem::MaybeUninit, num::NonZeroI32};
 
 #[derive(Clone, Copy)]
@@ -73,6 +73,8 @@ fn nvidia() -> &'static Nvidia {
                 .api
                 .device_handle_by_index(index, &mut handle)
                 .expect("create device handle");
+
+            info!("Found {handle}");
 
             nvidia.devices.push(handle);
         }
@@ -153,6 +155,8 @@ impl SourceNvidia {
 
         let dev = *dev?;
 
+        info!("Using {dev}");
+
         Ok(Self { dev })
     }
 }
@@ -223,5 +227,20 @@ impl Error for NvidiaError {}
 impl From<NvidiaError> for SourceNvidiaError {
     fn from(value: NvidiaError) -> Self {
         Self::Error(value)
+    }
+}
+
+impl fmt::Display for NvidiaDeviceHandle {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("NvidiaDevice")
+            .field(
+                "name",
+                &self.name().unwrap_or_else(|_| "<ERROR>".to_string()),
+            )
+            .field(
+                "uuid",
+                &self.uuid().unwrap_or_else(|_| "<ERROR>".to_string()),
+            )
+            .finish()
     }
 }
