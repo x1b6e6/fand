@@ -3,7 +3,7 @@ extern crate dlopen_derive;
 
 use crate::{
     config::{Config, ConfigFanTarget, ConfigSourceValue},
-    fan::{Fan, FanPwm},
+    fan::{Fan, FanPower, FanPwm},
     source::{Source, SourceFile, SourceNvidia},
 };
 use clap::Parser as _;
@@ -71,8 +71,14 @@ fn main() {
 
     loop {
         for (comp, fan) in fans.iter_mut() {
-            let power = comp.try_value().unwrap();
-            fan.as_ref().borrow_mut().try_set_power(power).unwrap();
+            let power = comp.try_compute().unwrap_or_else(|err| {
+                log::error!("error while computing: {err:?}");
+                FanPower::full_speed()
+            });
+
+            if let Err(err) = fan.as_ref().borrow_mut().try_set_power(power) {
+                log::error!("error while setting fan speed: {err:?}");
+            }
         }
         std::thread::sleep(interval);
         computed::cache_invalidate();

@@ -18,6 +18,12 @@ impl From<u8> for FanPower {
     }
 }
 
+impl FanPower {
+    pub fn full_speed() -> Self {
+        Self(255u8)
+    }
+}
+
 impl fmt::Display for FanPower {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let precision = f.precision().unwrap_or(1);

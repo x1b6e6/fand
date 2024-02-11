@@ -147,7 +147,7 @@ impl Computed {
         Ok(Self { formula })
     }
 
-    pub fn try_value(&self) -> Result<FanPower, DenoError> {
+    pub fn try_compute(&self) -> Result<FanPower, DenoError> {
         let js = unsafe { INSTANCE.js_mut() };
         let result = js.execute_script(
             "[computed.rs:runtime.js]",
@@ -158,17 +158,17 @@ impl Computed {
         let result = result.into_raw();
         let result = unsafe { result.as_ref() };
         let power = if !result.is_number() {
-            warn!("{result:?} is not a number. Set full speed.");
-            255
+            warn!("computed value {result:?} is not a number. Set full speed");
+            FanPower::full_speed()
         } else {
             let power = unsafe { result.to_number(&mut scope).unwrap_unchecked() };
             let power = power.value();
             let power = f64::min(f64::max(0.0, power), 1.0);
-            (power * 255.0) as _
-        };
-        let power = FanPower::from(power);
+            let power = FanPower::from((power * 255.0) as u8);
+            debug!("computed power: {power:7.2}");
 
-        debug!("computed power: {power:7.2}");
+            power
+        };
 
         Ok(power)
     }
