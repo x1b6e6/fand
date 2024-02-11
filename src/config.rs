@@ -12,7 +12,7 @@ pub struct Milliseconds(u64);
 #[derive(Debug, Default, PartialEq, Deserialize)]
 pub struct ConfigNvidiaFilter {
     pub name: Option<String>,
-    pub index: Option<u32>,
+    pub board_id: Option<u32>,
 }
 
 #[derive(Debug, PartialEq, Deserialize)]
@@ -157,7 +157,7 @@ path = "/pwm"
             ConfigSourceValue::Nvidia {
                 filter: ConfigNvidiaFilter {
                     name: None,
-                    index: None
+                    board_id: None
                 }
             }
         );
@@ -168,7 +168,7 @@ path = "/pwm"
             ConfigSourceValue::Nvidia {
                 filter: ConfigNvidiaFilter {
                     name: Some("my nvidia".to_owned()),
-                    index: None
+                    board_id: None
                 }
             }
         );

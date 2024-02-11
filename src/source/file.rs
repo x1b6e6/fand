@@ -16,7 +16,7 @@ impl SourceFile {
     pub fn new(path: impl AsRef<Path>, factor: Option<f32>) -> Result<Self, io::Error> {
         let file = File::options().read(true).open(path)?;
         let file = RefCell::new(file);
-        let factor = factor.unwrap_or(1000.0);
+        let factor = factor.unwrap_or(0.001);
 
         Ok(Self { file, factor })
     }
@@ -31,6 +31,6 @@ impl Source for SourceFile {
         let temp = unsafe { std::str::from_utf8_unchecked(&buf) };
         let temp: u32 = temp.parse()?;
 
-        Ok(Temperature::from_celsius(temp as f32 / self.factor))
+        Ok(Temperature::from_celsius(temp as f32 * self.factor))
     }
 }

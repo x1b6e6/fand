@@ -92,7 +92,7 @@ pub enum SourceNvidiaError {
     NoDevices,
     NotFound {
         name: Option<String>,
-        index: Option<u32>,
+        board_id: Option<u32>,
     },
     Error(NvidiaError),
 }
@@ -121,29 +121,31 @@ impl Drop for Nvidia {
 }
 
 impl SourceNvidia {
-    pub fn new(name: Option<String>, index: Option<u32>) -> Result<Self, SourceNvidiaError> {
+    pub fn new(name: Option<String>, board_id: Option<u32>) -> Result<Self, SourceNvidiaError> {
         let nvidia = nvidia();
 
-        let dev = match (&name, &index) {
-            (Some(name), Some(index)) => nvidia
+        let dev = match (&name, &board_id) {
+            (Some(name), Some(board_id)) => nvidia
                 .try_find_device(|dev| {
-                    Ok::<_, NvidiaError>(dev.name()? == name.as_str() && dev.board_id()? == *index)
+                    Ok::<_, NvidiaError>(
+                        dev.name()? == name.as_str() && dev.board_id()? == *board_id,
+                    )
                 })?
                 .ok_or_else(|| SourceNvidiaError::NotFound {
                     name: Some(name.clone()),
-                    index: Some(*index),
+                    board_id: Some(*board_id),
                 }),
-            (None, Some(index)) => nvidia
-                .try_find_device(|dev| Ok::<_, NvidiaError>(dev.board_id()? == *index))?
+            (None, Some(board_id)) => nvidia
+                .try_find_device(|dev| Ok::<_, NvidiaError>(dev.board_id()? == *board_id))?
                 .ok_or_else(|| SourceNvidiaError::NotFound {
                     name: None,
-                    index: Some(*index),
+                    board_id: Some(*board_id),
                 }),
             (Some(name), None) => nvidia
                 .try_find_device(|dev| Ok::<_, NvidiaError>(dev.name()? == name.as_str()))?
                 .ok_or_else(|| SourceNvidiaError::NotFound {
                     name: Some(name.clone()),
-                    index: None,
+                    board_id: None,
                 }),
             (None, None) => nvidia.devices.first().ok_or(SourceNvidiaError::NoDevices),
         };
