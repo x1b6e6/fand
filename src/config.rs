@@ -9,12 +9,6 @@ use std::{
 #[derive(Debug, PartialEq, Deserialize)]
 pub struct Milliseconds(u64);
 
-#[derive(Debug, Default, PartialEq, Deserialize)]
-pub struct ConfigNvidiaFilter {
-    pub name: Option<String>,
-    pub uuid: Option<String>,
-}
-
 #[derive(Debug, PartialEq, Deserialize)]
 #[serde(tag = "type")]
 pub enum ConfigSourceValue {
@@ -22,8 +16,8 @@ pub enum ConfigSourceValue {
     File { path: PathBuf, factor: Option<f32> },
     #[serde(rename = "nvidia")]
     Nvidia {
-        #[serde(default)]
-        filter: ConfigNvidiaFilter,
+        name: Option<String>,
+        uuid: Option<String>,
     },
 }
 
@@ -111,13 +105,13 @@ impl Default for Milliseconds {
 mod test {
     use std::{path::PathBuf, time::Duration};
 
-    use crate::config::{Config, ConfigFanTarget, ConfigNvidiaFilter, ConfigSourceValue};
+    use crate::config::{Config, ConfigFanTarget, ConfigSourceValue};
 
     #[test]
     fn parse() {
         const CONF: &str = r#"
 [main]
-interval = 123
+interval = 1
 
 [source.s1]
 type = "file"
@@ -128,11 +122,11 @@ type = "nvidia"
 
 [source.s3]
 type = "nvidia"
-filter = { name = "my nvidia" }
+name = "NVIDIA GeForce RTX 4090"
 
 [source.s4]
 type = "nvidia"
-filter = { uuid = "GPU-23eda959-34a7-4abf-8e19-9c0beded366e" }
+uuid = "GPU-23eda959-34a7-4abf-8e19-9c0beded366e"
 
 [source.s5]
 type = "file"
@@ -164,10 +158,8 @@ path = "/pwm"
         assert_eq!(
             config.sources["s2"],
             ConfigSourceValue::Nvidia {
-                filter: ConfigNvidiaFilter {
-                    name: None,
-                    uuid: None
-                }
+                name: None,
+                uuid: None
             }
         );
 
@@ -175,10 +167,8 @@ path = "/pwm"
         assert_eq!(
             config.sources["s3"],
             ConfigSourceValue::Nvidia {
-                filter: ConfigNvidiaFilter {
-                    name: Some("my nvidia".to_string()),
-                    uuid: None
-                }
+                name: Some("NVIDIA GeForce RTX 4090".to_string()),
+                uuid: None
             }
         );
 
@@ -186,10 +176,8 @@ path = "/pwm"
         assert_eq!(
             config.sources["s4"],
             ConfigSourceValue::Nvidia {
-                filter: ConfigNvidiaFilter {
-                    name: None,
-                    uuid: Some("GPU-23eda959-34a7-4abf-8e19-9c0beded366e".to_string()),
-                }
+                name: None,
+                uuid: Some("GPU-23eda959-34a7-4abf-8e19-9c0beded366e".to_string()),
             }
         );
 
