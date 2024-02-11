@@ -43,8 +43,8 @@ fn main() {
                     Rc::new(SourceFile::new(path, factor).unwrap())
                 }
                 ConfigSourceValue::Nvidia {
-                    filter: ConfigNvidiaFilter { name, board_id },
-                } => Rc::new(SourceNvidia::new(name, board_id).unwrap()),
+                    filter: ConfigNvidiaFilter { name, uuid },
+                } => Rc::new(SourceNvidia::new(name, uuid).unwrap()),
             };
             (name, source)
         })

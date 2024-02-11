@@ -24,8 +24,9 @@ pub struct NvidiaApi {
     #[dlopen_name = "nvmlDeviceGetHandleByIndex_v2"]
     device_handle_by_index: fn(index: u32, dev: &mut NvidiaDeviceHandle) -> Result<(), NvidiaError>,
 
-    #[dlopen_name = "nvmlDeviceGetBoardId"]
-    device_get_board_id: fn(dev: NvidiaDeviceHandle, id: &mut u32) -> Result<(), NvidiaError>,
+    #[dlopen_name = "nvmlDeviceGetUUID"]
+    device_get_uuid:
+        fn(dev: NvidiaDeviceHandle, buf: *mut u8, size: u32) -> Result<(), NvidiaError>,
 
     #[dlopen_name = "nvmlDeviceGetName"]
     device_get_name:
@@ -92,7 +93,7 @@ pub enum SourceNvidiaError {
     NoDevices,
     NotFound {
         name: Option<String>,
-        board_id: Option<u32>,
+        uuid: Option<String>,
     },
     Error(NvidiaError),
 }
@@ -121,31 +122,31 @@ impl Drop for Nvidia {
 }
 
 impl SourceNvidia {
-    pub fn new(name: Option<String>, board_id: Option<u32>) -> Result<Self, SourceNvidiaError> {
+    pub fn new(name: Option<String>, uuid: Option<String>) -> Result<Self, SourceNvidiaError> {
         let nvidia = nvidia();
 
-        let dev = match (&name, &board_id) {
-            (Some(name), Some(board_id)) => nvidia
+        let dev = match (&name, &uuid) {
+            (Some(name), Some(uuid)) => nvidia
                 .try_find_device(|dev| {
                     Ok::<_, NvidiaError>(
-                        dev.name()? == name.as_str() && dev.board_id()? == *board_id,
+                        dev.name()? == name.as_str() && dev.uuid()? == uuid.as_str(),
                     )
                 })?
                 .ok_or_else(|| SourceNvidiaError::NotFound {
                     name: Some(name.clone()),
-                    board_id: Some(*board_id),
+                    uuid: Some(uuid.clone()),
                 }),
-            (None, Some(board_id)) => nvidia
-                .try_find_device(|dev| Ok::<_, NvidiaError>(dev.board_id()? == *board_id))?
+            (None, Some(uuid)) => nvidia
+                .try_find_device(|dev| Ok::<_, NvidiaError>(dev.uuid()? == uuid.as_str()))?
                 .ok_or_else(|| SourceNvidiaError::NotFound {
                     name: None,
-                    board_id: Some(*board_id),
+                    uuid: Some(uuid.clone()),
                 }),
             (Some(name), None) => nvidia
                 .try_find_device(|dev| Ok::<_, NvidiaError>(dev.name()? == name.as_str()))?
                 .ok_or_else(|| SourceNvidiaError::NotFound {
                     name: Some(name.clone()),
-                    board_id: None,
+                    uuid: None,
                 }),
             (None, None) => nvidia.devices.first().ok_or(SourceNvidiaError::NoDevices),
         };
@@ -170,8 +171,9 @@ impl NvidiaDeviceHandle {
 
     fn name(&self) -> Result<String, NvidiaError> {
         let mut buf = [0u8; 4096];
-        let api = &nvidia().api;
-        api.device_get_name(*self, buf.as_mut_ptr(), 4096)?;
+        nvidia()
+            .api
+            .device_get_name(*self, buf.as_mut_ptr(), buf.len() as u32)?;
 
         let name = unsafe { CStr::from_ptr(buf.as_ptr().cast()) };
         let name = unsafe { std::str::from_utf8_unchecked(name.to_bytes()) };
@@ -179,12 +181,16 @@ impl NvidiaDeviceHandle {
         Ok(name.to_string())
     }
 
-    fn board_id(&self) -> Result<u32, NvidiaError> {
-        let mut id = 0;
-        let api = &nvidia().api;
-        api.device_get_board_id(*self, &mut id)?;
+    fn uuid(&self) -> Result<String, NvidiaError> {
+        let mut buf = [0u8; 41];
+        nvidia()
+            .api
+            .device_get_uuid(*self, buf.as_mut_ptr(), buf.len() as u32)?;
 
-        Ok(id)
+        let uuid = unsafe { CStr::from_ptr(buf.as_ptr().cast()) };
+        let uuid = unsafe { std::str::from_utf8_unchecked(uuid.to_bytes()) };
+
+        Ok(uuid.to_string())
     }
 
     fn temp(&self) -> Result<u32, NvidiaError> {
@@ -198,10 +204,9 @@ impl NvidiaDeviceHandle {
 
 impl fmt::Display for NvidiaError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let api = &nvidia().api;
-        let err = api.error_string(*self);
-        let err = unsafe { CStr::from_ptr(err.cast()) };
-        let message = unsafe { std::str::from_utf8_unchecked(err.to_bytes()) };
+        let message = nvidia().api.error_string(*self);
+        let message = unsafe { CStr::from_ptr(message.cast()) };
+        let message = unsafe { std::str::from_utf8_unchecked(message.to_bytes()) };
 
         f.write_str(message)
     }

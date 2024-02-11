@@ -12,7 +12,7 @@ pub struct Milliseconds(u64);
 #[derive(Debug, Default, PartialEq, Deserialize)]
 pub struct ConfigNvidiaFilter {
     pub name: Option<String>,
-    pub board_id: Option<u32>,
+    pub uuid: Option<String>,
 }
 
 #[derive(Debug, PartialEq, Deserialize)]
@@ -132,7 +132,7 @@ filter = { name = "my nvidia" }
 
 [source.s4]
 type = "nvidia"
-filter = { board_id = 1 }
+filter = { uuid = "GPU-23eda959-34a7-4abf-8e19-9c0beded366e" }
 
 [source.s5]
 type = "file"
@@ -166,7 +166,7 @@ path = "/pwm"
             ConfigSourceValue::Nvidia {
                 filter: ConfigNvidiaFilter {
                     name: None,
-                    board_id: None
+                    uuid: None
                 }
             }
         );
@@ -176,8 +176,8 @@ path = "/pwm"
             config.sources["s3"],
             ConfigSourceValue::Nvidia {
                 filter: ConfigNvidiaFilter {
-                    name: Some("my nvidia".to_owned()),
-                    board_id: None
+                    name: Some("my nvidia".to_string()),
+                    uuid: None
                 }
             }
         );
@@ -188,7 +188,7 @@ path = "/pwm"
             ConfigSourceValue::Nvidia {
                 filter: ConfigNvidiaFilter {
                     name: None,
-                    board_id: Some(1),
+                    uuid: Some("GPU-23eda959-34a7-4abf-8e19-9c0beded366e".to_string()),
                 }
             }
         );
