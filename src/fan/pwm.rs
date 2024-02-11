@@ -11,21 +11,58 @@ struct PwmEnable {
     original: [u8; 4],
 }
 
-pub struct FanPwm {
+struct InnerFanPwm {
     file: File,
     _enable: PwmEnable,
 }
 
-fn file_write(file: &mut File, data: &[u8]) -> Result<(), io::Error> {
+pub struct FanPwm {
+    pwm_path: PathBuf,
+    pwm_enable_path: PathBuf,
+    inner: Option<InnerFanPwm>,
+}
+
+fn file_write(file: &mut File, data: &[u8]) -> io::Result<()> {
     file.seek(io::SeekFrom::Start(0))?;
     file.write_all(data)?;
     file.flush()
 }
 
 impl FanPwm {
-    pub fn new(path: impl AsRef<Path>) -> Result<Self, io::Error> {
-        let file = File::options().write(true).truncate(true).open(&path)?;
-        let enable = PwmEnable::new(path)?;
+    pub fn new(path: impl AsRef<Path>) -> io::Result<Self> {
+        let pwm_path = PathBuf::from(path.as_ref());
+        let pwm_enable_path = PwmEnable::path_to_pwm_enable(path).unwrap();
+        let inner = InnerFanPwm::new(&pwm_path, &pwm_enable_path)?;
+
+        Ok(Self {
+            pwm_path,
+            pwm_enable_path,
+            inner: Some(inner),
+        })
+    }
+
+    fn file_write(&mut self, buf: &[u8]) -> io::Result<()> {
+        let file = match &mut self.inner {
+            Some(ref mut inner) => &mut inner.file,
+            None => {
+                self.inner = Some(InnerFanPwm::new(&self.pwm_path, &self.pwm_enable_path)?);
+
+                unsafe { &mut self.inner.as_mut().unwrap_unchecked().file }
+            }
+        };
+
+        let ret = file_write(file, buf);
+        if ret.is_err() {
+            self.inner.take();
+        }
+        ret
+    }
+}
+
+impl InnerFanPwm {
+    fn new(pwm: impl AsRef<Path>, pwm_enable: impl AsRef<Path>) -> io::Result<Self> {
+        let file = File::options().write(true).truncate(true).open(&pwm)?;
+        let enable = PwmEnable::new(pwm_enable)?;
 
         Ok(Self {
             file,
@@ -35,11 +72,8 @@ impl FanPwm {
 }
 
 impl PwmEnable {
-    fn new(path: impl AsRef<Path>) -> Result<Self, io::Error> {
-        let mut file = File::options()
-            .write(true)
-            .read(true)
-            .open(Self::path_to_pwm_enable(path).unwrap())?;
+    fn new(path: impl AsRef<Path>) -> io::Result<Self> {
+        let mut file = File::options().write(true).read(true).open(path)?;
         let mut original = [0u8; 4];
 
         file.read(&mut original)?;
@@ -50,7 +84,8 @@ impl PwmEnable {
     }
 
     fn path_to_pwm_enable(path: impl AsRef<Path>) -> Option<PathBuf> {
-        let pwm_name = std::str::from_utf8(path.as_ref().file_name()?.as_encoded_bytes()).ok()?;
+        let pwm_name =
+            unsafe { std::str::from_utf8_unchecked(path.as_ref().file_name()?.as_encoded_bytes()) };
 
         Some(
             path.as_ref()
@@ -69,7 +104,7 @@ impl Drop for PwmEnable {
 
 impl Fan for FanPwm {
     fn try_set_power(&mut self, power: FanPower) -> Result<(), Box<dyn Error>> {
-        file_write(&mut self.file, format!("{}", power.0).as_bytes())?;
+        self.file_write(format!("{}", power.0).as_bytes())?;
 
         Ok(())
     }
