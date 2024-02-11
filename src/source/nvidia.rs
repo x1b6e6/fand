@@ -244,3 +244,19 @@ impl fmt::Display for NvidiaDeviceHandle {
             .finish()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::NvidiaError;
+    use std::mem::size_of;
+
+    #[test]
+    fn nvidia_error_sizes() {
+        assert_eq!(size_of::<NvidiaError>(), size_of::<i32>());
+        assert_eq!(size_of::<Option<NvidiaError>>(), size_of::<NvidiaError>());
+        assert_eq!(
+            size_of::<Result<(), NvidiaError>>(),
+            size_of::<NvidiaError>()
+        );
+    }
+}
