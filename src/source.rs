@@ -22,7 +22,7 @@ impl Temperature {
 
 /// trait for access source of temperature
 pub trait Source {
-    fn value(&self) -> Result<Temperature, Box<dyn Error>>;
+    fn try_get_temperature(&self) -> Result<Temperature, Box<dyn Error>>;
 }
 
 impl fmt::Display for Temperature {

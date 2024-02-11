@@ -23,7 +23,7 @@ impl SourceFile {
 }
 
 impl Source for SourceFile {
-    fn value(&self) -> Result<Temperature, Box<dyn Error>> {
+    fn try_get_temperature(&self) -> Result<Temperature, Box<dyn Error>> {
         let mut buf = [0u8; 10];
         self.file.borrow_mut().seek(SeekFrom::Start(0))?;
         let size = self.file.borrow_mut().read(&mut buf)?;

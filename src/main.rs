@@ -71,8 +71,8 @@ fn main() {
 
     loop {
         for (comp, fan) in fans.iter_mut() {
-            let power = comp.value().unwrap();
-            fan.as_ref().borrow_mut().write(power).unwrap();
+            let power = comp.try_value().unwrap();
+            fan.as_ref().borrow_mut().try_set_power(power).unwrap();
         }
         std::thread::sleep(interval);
         computed::cache_invalidate();

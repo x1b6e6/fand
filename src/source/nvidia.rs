@@ -162,7 +162,7 @@ impl SourceNvidia {
 }
 
 impl Source for SourceNvidia {
-    fn value(&self) -> Result<Temperature, Box<dyn Error>> {
+    fn try_get_temperature(&self) -> Result<Temperature, Box<dyn Error>> {
         let temp = self.dev.temp()?;
         Ok(Temperature::from_celsius(temp as f32))
     }

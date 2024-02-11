@@ -51,11 +51,11 @@ impl PwmEnable {
     }
 
     fn path_to_pwm_enable(path: impl AsRef<Path>) -> Option<PathBuf> {
-        let pwmname = std::str::from_utf8(path.as_ref().file_name()?.as_encoded_bytes()).ok()?;
+        let pwm_name = std::str::from_utf8(path.as_ref().file_name()?.as_encoded_bytes()).ok()?;
 
         Some(
             path.as_ref()
-                .with_file_name(pwmname.to_string() + "_enable"),
+                .with_file_name(pwm_name.to_string() + "_enable"),
         )
     }
 }
@@ -69,7 +69,7 @@ impl Drop for PwmEnable {
 }
 
 impl Fan for FanPwm {
-    fn write(&mut self, power: FanPower) -> Result<(), Box<dyn Error>> {
+    fn try_set_power(&mut self, power: FanPower) -> Result<(), Box<dyn Error>> {
         file_write(&mut self.file, format!("{}", power.0).as_bytes())?;
 
         Ok(())

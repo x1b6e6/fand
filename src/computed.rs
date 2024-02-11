@@ -2,7 +2,9 @@ use crate::{
     fan::FanPower,
     source::{Source, Temperature},
 };
-use deno_core::{v8, Extension, FastString, JsRuntime, RuntimeOptions};
+use deno_core::{
+    error::AnyError as DenoError, v8, Extension, FastString, JsRuntime, RuntimeOptions,
+};
 use log::{debug, error, trace, warn};
 use std::{
     cell::RefCell, collections::HashMap, convert::Infallible, error::Error, mem::MaybeUninit,
@@ -62,7 +64,7 @@ impl Sources {
 
         let source = unsafe { self.sources.assume_init_ref() }.get(name);
         if let Some(source) = source {
-            let result = source.value();
+            let result = source.try_get_temperature();
             match result {
                 Ok(temperature) => {
                     unsafe { self.cache.borrow_mut().assume_init_mut() }
@@ -115,7 +117,8 @@ impl Sources {
                     ret.set_double(temperature.celsius() as f64);
                 }
                 CachedResult::Err(err) => {
-                    error!("{err:?}");
+                    error!("cannot get temperature for {name}: {err:?}");
+                    ret.set_undefined();
                 }
             }
         }
@@ -144,14 +147,12 @@ impl Computed {
         Ok(Self { formula })
     }
 
-    pub fn value(&self) -> Result<FanPower, ()> {
+    pub fn try_value(&self) -> Result<FanPower, DenoError> {
         let js = unsafe { INSTANCE.js_mut() };
-        let result = js
-            .execute_script(
-                "[computed.rs:runtime.js]",
-                FastString::Owned(Box::from(self.formula.as_str())),
-            )
-            .unwrap();
+        let result = js.execute_script(
+            "[computed.rs:runtime.js]",
+            FastString::Owned(Box::from(self.formula.as_str())),
+        )?;
 
         let mut scope = js.handle_scope();
         let result = result.into_raw();
@@ -160,14 +161,14 @@ impl Computed {
             warn!("{result:?} is not a number. Set full speed.");
             255
         } else {
-            let power = result.to_number(&mut scope).unwrap();
+            let power = unsafe { result.to_number(&mut scope).unwrap_unchecked() };
             let power = power.value();
             let power = f64::min(f64::max(0.0, power), 1.0);
             (power * 255.0) as _
         };
         let power = FanPower::from(power);
 
-        debug!("power: {power:7.2}");
+        debug!("computed power: {power:7.2}");
 
         Ok(power)
     }
