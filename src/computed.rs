@@ -5,7 +5,6 @@ use crate::{
 use deno_core::{
     error::AnyError as DenoError, v8, Extension, FastString, JsRuntime, RuntimeOptions,
 };
-use log::{debug, error, trace, warn};
 use std::{
     cell::RefCell, collections::HashMap, convert::Infallible, error::Error, mem::MaybeUninit,
     rc::Rc,
@@ -104,20 +103,20 @@ impl Sources {
         mut ret: v8::ReturnValue,
     ) {
         let name = name.to_rust_string_lossy(scope);
-        trace!("accessing {name}");
+        log::trace!("accessing {name}");
         let value = unsafe { INSTANCE.value(&name) };
         if let Some(value) = value {
             match value {
                 CachedResult::Cached(temperature) => {
-                    debug!("using cached value for {name}: {temperature:8}");
+                    log::debug!("using cached value for {name}: {temperature:8}");
                     ret.set_double(temperature.celsius() as f64);
                 }
                 CachedResult::Some(temperature) => {
-                    debug!("{name}: {temperature:8}");
+                    log::debug!("{name}: {temperature:8}");
                     ret.set_double(temperature.celsius() as f64);
                 }
                 CachedResult::Err(err) => {
-                    error!("cannot get temperature for {name}: {err:?}");
+                    log::error!("cannot get temperature for {name}: {err:?}");
                     ret.set_undefined();
                 }
             }
@@ -158,14 +157,14 @@ impl Computed {
         let result = result.into_raw();
         let result = unsafe { result.as_ref() };
         let power = if !result.is_number() {
-            warn!("computed value {result:?} is not a number. Set full speed");
+            log::warn!("computed value {result:?} is not a number. Set full speed");
             FanPower::full_speed()
         } else {
             let power = unsafe { result.to_number(&mut scope).unwrap_unchecked() };
             let power = power.value();
             let power = f64::min(f64::max(0.0, power), 1.0);
             let power = FanPower::from((power * 255.0) as u8);
-            debug!("computed power: {power:7.2}");
+            log::debug!("computed power: {power:7.2}");
 
             power
         };

@@ -1,5 +1,4 @@
 use super::{Fan, FanPower};
-use log::error;
 use std::{
     error::Error,
     fs::File,
@@ -63,7 +62,7 @@ impl PwmEnable {
 impl Drop for PwmEnable {
     fn drop(&mut self) {
         if let Err(e) = file_write(&mut self.file, &self.original) {
-            error!("cannot disable pwm: {e}");
+            log::error!("cannot disable pwm: {e}");
         }
     }
 }

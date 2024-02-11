@@ -1,6 +1,5 @@
 use super::{Source, Temperature};
 use dlopen::wrapper::{Container, WrapperApi};
-use log::{error, info};
 use std::{error::Error, ffi::CStr, fmt, mem::MaybeUninit, num::NonZeroI32};
 
 #[derive(Clone, Copy)]
@@ -74,7 +73,7 @@ fn nvidia() -> &'static Nvidia {
                 .device_handle_by_index(index, &mut handle)
                 .expect("create device handle");
 
-            info!("Found {handle}");
+            log::info!("Found {handle}");
 
             nvidia.devices.push(handle);
         }
@@ -118,7 +117,7 @@ impl Nvidia {
 impl Drop for Nvidia {
     fn drop(&mut self) {
         if let Err(err) = self.api.deinit() {
-            error!("cannot deinit nvidia api: {err:?}");
+            log::error!("cannot deinit nvidia api: {err:?}");
         }
     }
 }
@@ -155,7 +154,7 @@ impl SourceNvidia {
 
         let dev = *dev?;
 
-        info!("Using {dev}");
+        log::info!("Using {dev}");
 
         Ok(Self { dev })
     }
