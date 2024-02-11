@@ -1,7 +1,7 @@
 use super::{Source, Temperature};
 use dlopen::wrapper::{Container, WrapperApi};
 use log::error;
-use std::{error::Error, ffi::CStr, mem::MaybeUninit, str::FromStr};
+use std::{error::Error, ffi::CStr, fmt, mem::MaybeUninit, num::NonZeroI32};
 
 #[derive(Clone, Copy)]
 #[repr(C)]
@@ -10,28 +10,30 @@ struct NvidiaDeviceHandle(*const ());
 #[derive(WrapperApi)]
 pub struct NvidiaApi {
     #[dlopen_name = "nvmlInit_v2"]
-    init: fn() -> i32,
+    init: fn() -> Result<(), NvidiaError>,
 
     #[dlopen_name = "nvmlShutdown"]
-    deinit: fn() -> i32,
+    deinit: fn() -> Result<(), NvidiaError>,
 
     #[dlopen_name = "nvmlErrorString"]
-    error_string: fn(ret: i32) -> *const u8,
+    error_string: fn(ret: NvidiaError) -> *const u8,
 
     #[dlopen_name = "nvmlDeviceGetCount_v2"]
-    devices_count: fn(count: &mut u32) -> i32,
+    devices_count: fn(count: &mut u32) -> Result<(), NvidiaError>,
 
     #[dlopen_name = "nvmlDeviceGetHandleByIndex_v2"]
-    device_handle_by_index: fn(index: u32, dev: &mut NvidiaDeviceHandle) -> i32,
+    device_handle_by_index: fn(index: u32, dev: &mut NvidiaDeviceHandle) -> Result<(), NvidiaError>,
 
     #[dlopen_name = "nvmlDeviceGetBoardId"]
-    device_get_board_id: fn(dev: NvidiaDeviceHandle, id: &mut u32) -> i32,
+    device_get_board_id: fn(dev: NvidiaDeviceHandle, id: &mut u32) -> Result<(), NvidiaError>,
 
     #[dlopen_name = "nvmlDeviceGetName"]
-    device_get_name: fn(dev: NvidiaDeviceHandle, name: *mut u8, len: u32) -> i32,
+    device_get_name:
+        fn(dev: NvidiaDeviceHandle, name: *mut u8, len: u32) -> Result<(), NvidiaError>,
 
     #[dlopen_name = "nvmlDeviceGetTemperature"]
-    device_get_temperature: fn(dev: NvidiaDeviceHandle, types: i32, temp: &mut u32) -> i32,
+    device_get_temperature:
+        fn(dev: NvidiaDeviceHandle, types: i32, temp: &mut u32) -> Result<(), NvidiaError>,
 }
 
 struct Nvidia {
@@ -48,10 +50,8 @@ fn nvidia() -> &'static Nvidia {
         let api: Container<NvidiaApi> =
             unsafe { Container::load("libnvidia-ml.so") }.expect("loading libnvidia-ml.so");
 
-        let ret = api.init();
-        if ret != 0 {
-            panic!("{:?}", NvidiaError::from_nvidia(&api, ret));
-        }
+        api.init().expect("init nvidia backend");
+
         unsafe {
             NVIDIA.0 = true;
             NVIDIA.1.write(Nvidia {
@@ -61,17 +61,17 @@ fn nvidia() -> &'static Nvidia {
         };
 
         let mut cnt = 0;
-        let ret = nvidia.api.devices_count(&mut cnt);
-        if ret != 0 {
-            panic!("{:?}", NvidiaError::from_nvidia(&nvidia.api, ret));
-        }
+        nvidia
+            .api
+            .devices_count(&mut cnt)
+            .expect("get nvidia device count");
 
         for index in 0..cnt {
             let mut handle = NvidiaDeviceHandle::null();
-            let ret = nvidia.api.device_handle_by_index(index, &mut handle);
-            if ret != 0 {
-                panic!("{:?}", NvidiaError::from_nvidia(&nvidia.api, ret));
-            }
+            nvidia
+                .api
+                .device_handle_by_index(index, &mut handle)
+                .expect("create device handle");
 
             nvidia.devices.push(handle);
         }
@@ -84,10 +84,8 @@ pub struct SourceNvidia {
     dev: NvidiaDeviceHandle,
 }
 
-#[derive(Debug)]
-pub struct NvidiaError {
-    message: String,
-}
+#[derive(Clone, Copy)]
+pub struct NvidiaError(NonZeroI32);
 
 #[derive(Debug)]
 pub enum SourceNvidiaError {
@@ -96,22 +94,28 @@ pub enum SourceNvidiaError {
         name: Option<String>,
         index: Option<u32>,
     },
+    Error(NvidiaError),
 }
 
 impl Nvidia {
-    fn find_device(
+    fn try_find_device<E>(
         &self,
-        filter: impl Fn(&NvidiaDeviceHandle) -> bool,
-    ) -> Option<&NvidiaDeviceHandle> {
-        self.devices.iter().find(|dev| filter(*dev))
+        filter: impl Fn(&NvidiaDeviceHandle) -> Result<bool, E>,
+    ) -> Result<Option<&NvidiaDeviceHandle>, E> {
+        for handle in self.devices.iter() {
+            if filter(handle)? {
+                return Ok(Some(handle));
+            }
+        }
+
+        Ok(None)
     }
 }
 
 impl Drop for Nvidia {
     fn drop(&mut self) {
-        let ret = self.api.deinit();
-        if ret != 0 {
-            error!("{:?}", self.api.error_string(ret));
+        if let Err(err) = self.api.deinit() {
+            error!("cannot deinit nvidia api: {err:?}");
         }
     }
 }
@@ -122,21 +126,21 @@ impl SourceNvidia {
 
         let dev = match (&name, &index) {
             (Some(name), Some(index)) => nvidia
-                .find_device(|dev| {
-                    dev.name().unwrap() == name.as_str() && dev.board_id().unwrap() == *index
-                })
+                .try_find_device(|dev| {
+                    Ok::<_, NvidiaError>(dev.name()? == name.as_str() && dev.board_id()? == *index)
+                })?
                 .ok_or_else(|| SourceNvidiaError::NotFound {
                     name: Some(name.clone()),
                     index: Some(*index),
                 }),
             (None, Some(index)) => nvidia
-                .find_device(|dev| dev.board_id().unwrap() == *index)
+                .try_find_device(|dev| Ok::<_, NvidiaError>(dev.board_id()? == *index))?
                 .ok_or_else(|| SourceNvidiaError::NotFound {
                     name: None,
                     index: Some(*index),
                 }),
             (Some(name), None) => nvidia
-                .find_device(|dev| dev.name().unwrap() == name.as_str())
+                .try_find_device(|dev| Ok::<_, NvidiaError>(dev.name()? == name.as_str()))?
                 .ok_or_else(|| SourceNvidiaError::NotFound {
                     name: Some(name.clone()),
                     index: None,
@@ -157,16 +161,6 @@ impl Source for SourceNvidia {
     }
 }
 
-impl NvidiaError {
-    fn from_nvidia(api: &Container<NvidiaApi>, ret: i32) -> Self {
-        let err = api.error_string(ret);
-        let err = unsafe { CStr::from_ptr(err as *const i8) };
-        Self {
-            message: String::from_str(err.to_str().unwrap()).unwrap(),
-        }
-    }
-}
-
 impl NvidiaDeviceHandle {
     fn null() -> Self {
         Self(std::ptr::null())
@@ -175,23 +169,18 @@ impl NvidiaDeviceHandle {
     fn name(&self) -> Result<String, NvidiaError> {
         let mut buf = [0u8; 4096];
         let api = &nvidia().api;
-        let ret = api.device_get_name(*self, &mut buf as *mut u8, 4096);
-        if ret != 0 {
-            return Err(NvidiaError::from_nvidia(api, ret));
-        }
+        api.device_get_name(*self, buf.as_mut_ptr(), 4096)?;
 
-        let name = CStr::from_bytes_until_nul(&buf).unwrap();
+        let name = unsafe { CStr::from_ptr(buf.as_ptr().cast()) };
+        let name = unsafe { std::str::from_utf8_unchecked(name.to_bytes()) };
 
-        Ok(String::from_str(name.to_str().unwrap()).unwrap())
+        Ok(name.to_string())
     }
 
     fn board_id(&self) -> Result<u32, NvidiaError> {
         let mut id = 0;
         let api = &nvidia().api;
-        let ret = api.device_get_board_id(*self, &mut id);
-        if ret != 0 {
-            return Err(NvidiaError::from_nvidia(api, ret));
-        }
+        api.device_get_board_id(*self, &mut id)?;
 
         Ok(id)
     }
@@ -199,19 +188,33 @@ impl NvidiaDeviceHandle {
     fn temp(&self) -> Result<u32, NvidiaError> {
         let mut temp = 0;
         let api = &nvidia().api;
-        let ret = api.device_get_temperature(*self, 0, &mut temp);
-        if ret != 0 {
-            return Err(NvidiaError::from_nvidia(api, ret));
-        }
+        api.device_get_temperature(*self, 0, &mut temp)?;
 
         Ok(temp)
     }
 }
 
-impl std::fmt::Display for NvidiaError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&self.message)
+impl fmt::Display for NvidiaError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let api = &nvidia().api;
+        let err = api.error_string(*self);
+        let err = unsafe { CStr::from_ptr(err.cast()) };
+        let message = unsafe { std::str::from_utf8_unchecked(err.to_bytes()) };
+
+        f.write_str(message)
+    }
+}
+
+impl fmt::Debug for NvidiaError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(self, f)
     }
 }
 
 impl Error for NvidiaError {}
+
+impl From<NvidiaError> for SourceNvidiaError {
+    fn from(value: NvidiaError) -> Self {
+        Self::Error(value)
+    }
+}
