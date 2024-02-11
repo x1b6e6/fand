@@ -130,7 +130,8 @@ impl SourceNvidia {
             (Some(name), Some(uuid)) => nvidia
                 .try_find_device(|dev| {
                     Ok::<_, NvidiaError>(
-                        dev.name()? == name.as_str() && dev.uuid()? == uuid.as_str(),
+                        dev.try_get_name()? == name.as_str()
+                            && dev.try_get_uuid()? == uuid.as_str(),
                     )
                 })?
                 .ok_or_else(|| SourceNvidiaError::NotFound {
@@ -138,13 +139,13 @@ impl SourceNvidia {
                     uuid: Some(uuid.clone()),
                 }),
             (None, Some(uuid)) => nvidia
-                .try_find_device(|dev| Ok::<_, NvidiaError>(dev.uuid()? == uuid.as_str()))?
+                .try_find_device(|dev| Ok::<_, NvidiaError>(dev.try_get_uuid()? == uuid.as_str()))?
                 .ok_or_else(|| SourceNvidiaError::NotFound {
                     name: None,
                     uuid: Some(uuid.clone()),
                 }),
             (Some(name), None) => nvidia
-                .try_find_device(|dev| Ok::<_, NvidiaError>(dev.name()? == name.as_str()))?
+                .try_find_device(|dev| Ok::<_, NvidiaError>(dev.try_get_name()? == name.as_str()))?
                 .ok_or_else(|| SourceNvidiaError::NotFound {
                     name: Some(name.clone()),
                     uuid: None,
@@ -162,17 +163,13 @@ impl SourceNvidia {
 
 impl Source for SourceNvidia {
     fn try_get_temperature(&self) -> Result<Temperature, Box<dyn Error>> {
-        let temp = self.dev.temp()?;
+        let temp = self.dev.try_get_temperature()?;
         Ok(Temperature::from_celsius(temp as f32))
     }
 }
 
 impl NvidiaDeviceHandle {
-    fn null() -> Self {
-        Self(std::ptr::null())
-    }
-
-    fn name(&self) -> Result<String, NvidiaError> {
+    fn try_get_name(&self) -> Result<String, NvidiaError> {
         let mut buf = [0u8; 4096];
         nvidia()
             .api
@@ -184,7 +181,7 @@ impl NvidiaDeviceHandle {
         Ok(name.to_string())
     }
 
-    fn uuid(&self) -> Result<String, NvidiaError> {
+    fn try_get_uuid(&self) -> Result<String, NvidiaError> {
         let mut buf = [0u8; 41];
         nvidia()
             .api
@@ -196,7 +193,7 @@ impl NvidiaDeviceHandle {
         Ok(uuid.to_string())
     }
 
-    fn temp(&self) -> Result<u32, NvidiaError> {
+    fn try_get_temperature(&self) -> Result<u32, NvidiaError> {
         let mut temp = 0;
         let api = &nvidia().api;
         api.device_get_temperature(*self, 0, &mut temp)?;
@@ -234,11 +231,15 @@ impl fmt::Display for NvidiaDeviceHandle {
         f.debug_struct("NvidiaDevice")
             .field(
                 "name",
-                &self.name().unwrap_or_else(|_| "<ERROR>".to_string()),
+                &self
+                    .try_get_name()
+                    .unwrap_or_else(|_| "<ERROR>".to_string()),
             )
             .field(
                 "uuid",
-                &self.uuid().unwrap_or_else(|_| "<ERROR>".to_string()),
+                &self
+                    .try_get_uuid()
+                    .unwrap_or_else(|_| "<ERROR>".to_string()),
             )
             .finish()
     }
