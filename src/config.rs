@@ -130,6 +130,15 @@ type = "nvidia"
 type = "nvidia"
 filter = { name = "my nvidia" }
 
+[source.s4]
+type = "nvidia"
+filter = { board_id = 1 }
+
+[source.s5]
+type = "file"
+factor = 0.1
+path = "/value2"
+
 [[fan]]
 type = "pwm"
 value = "s3"
@@ -137,7 +146,7 @@ path = "/pwm"
 "#;
         let config: Config = toml::from_str(CONF).unwrap();
 
-        assert_eq!(config.sources.len(), 3);
+        assert_eq!(config.sources.len(), 5);
         assert_eq!(config.fans.len(), 1);
 
         assert_eq!(config.main.interval, Duration::from_secs(123));
@@ -170,6 +179,26 @@ path = "/pwm"
                     name: Some("my nvidia".to_owned()),
                     board_id: None
                 }
+            }
+        );
+
+        assert!(config.sources.contains_key("s4"));
+        assert_eq!(
+            config.sources["s4"],
+            ConfigSourceValue::Nvidia {
+                filter: ConfigNvidiaFilter {
+                    name: None,
+                    board_id: Some(1),
+                }
+            }
+        );
+
+        assert!(config.sources.contains_key("s5"));
+        assert_eq!(
+            config.sources["s5"],
+            ConfigSourceValue::File {
+                path: PathBuf::from("/value2"),
+                factor: Some(0.1)
             }
         );
 
