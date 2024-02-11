@@ -22,10 +22,11 @@ impl SourceFile {
 
 impl Source for SourceFile {
     fn value(&self) -> Result<Temperature, Box<dyn Error>> {
-        let mut buf = Vec::new();
+        let mut buf = [0u8; 10];
         self.file.borrow_mut().seek(SeekFrom::Start(0))?;
-        self.file.borrow_mut().read_to_end(&mut buf)?;
-        let temp = unsafe { std::str::from_utf8_unchecked(&buf[..buf.len() - 1]) };
+        let size = self.file.borrow_mut().read(&mut buf)?;
+        let buf = unsafe { std::slice::from_raw_parts(buf.as_ptr(), size - 1) };
+        let temp = unsafe { std::str::from_utf8_unchecked(&buf) };
         let temp: u32 = temp.parse()?;
 
         Ok(Temperature::from_celsius(temp as f32 / 1000.0))
