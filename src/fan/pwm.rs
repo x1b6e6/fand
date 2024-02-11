@@ -19,7 +19,7 @@ pub struct FanPwm {
 
 fn file_write(file: &mut File, data: &[u8]) -> Result<(), io::Error> {
     file.seek(io::SeekFrom::Start(0))?;
-    file.write(data)?;
+    file.write_all(data)?;
     file.flush()
 }
 
