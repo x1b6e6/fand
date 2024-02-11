@@ -111,7 +111,7 @@ mod test {
     fn parse() {
         const CONF: &str = r#"
 [main]
-interval = 1
+interval = 123
 
 [source.s1]
 type = "file"
