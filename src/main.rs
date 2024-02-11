@@ -15,6 +15,7 @@ mod cli;
 mod computed;
 mod config;
 mod fan;
+mod signal_handler;
 mod source;
 
 fn main() {
@@ -22,6 +23,7 @@ fn main() {
         env::set_var("RUST_LOG", "info")
     }
     env_logger::init();
+    signal_handler::init();
 
     let app = cli::App::parse();
     let path = PathBuf::from_str(
