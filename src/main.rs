@@ -39,7 +39,9 @@ fn main() {
         .into_iter()
         .map(|(name, source)| {
             let source: Rc<dyn Source> = match source {
-                ConfigSourceValue::File { path } => Rc::new(SourceFile::new(path).unwrap()),
+                ConfigSourceValue::File { path, factor } => {
+                    Rc::new(SourceFile::new(path, factor).unwrap())
+                }
                 ConfigSourceValue::Nvidia {
                     filter: ConfigNvidiaFilter { name, index },
                 } => Rc::new(SourceNvidia::new(name, index).unwrap()),

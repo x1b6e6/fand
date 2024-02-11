@@ -6,20 +6,20 @@ use std::{
     time::Duration,
 };
 
-#[derive(Debug, PartialEq, Eq, Deserialize)]
+#[derive(Debug, PartialEq, Deserialize)]
 pub struct Milliseconds(u64);
 
-#[derive(Debug, Default, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Default, PartialEq, Deserialize)]
 pub struct ConfigNvidiaFilter {
     pub name: Option<String>,
     pub index: Option<u32>,
 }
 
-#[derive(Debug, PartialEq, Eq, Deserialize)]
+#[derive(Debug, PartialEq, Deserialize)]
 #[serde(tag = "type")]
 pub enum ConfigSourceValue {
     #[serde(rename = "file")]
-    File { path: PathBuf },
+    File { path: PathBuf, factor: Option<f32> },
     #[serde(rename = "nvidia")]
     Nvidia {
         #[serde(default)]
@@ -27,21 +27,21 @@ pub enum ConfigSourceValue {
     },
 }
 
-#[derive(Debug, PartialEq, Eq, Deserialize)]
+#[derive(Debug, PartialEq, Deserialize)]
 #[serde(tag = "type")]
 pub enum ConfigFanTarget {
     #[serde(rename = "pwm")]
     Pwm { path: PathBuf },
 }
 
-#[derive(Debug, PartialEq, Eq, Deserialize)]
+#[derive(Debug, PartialEq, Deserialize)]
 pub struct ConfigFan {
     pub value: String,
     #[serde(flatten)]
     pub target: ConfigFanTarget,
 }
 
-#[derive(Debug, PartialEq, Eq, Deserialize)]
+#[derive(Debug, PartialEq, Deserialize)]
 pub struct ConfigMain {
     #[serde(default = "ConfigMain::interval_default")]
     #[serde(deserialize_with = "ConfigMain::interval_deserialize")]
@@ -62,7 +62,7 @@ impl ConfigMain {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Deserialize)]
+#[derive(Debug, PartialEq, Deserialize)]
 pub struct Config {
     pub main: ConfigMain,
     #[serde(rename = "source")]
@@ -146,7 +146,8 @@ path = "/pwm"
         assert_eq!(
             config.sources["s1"],
             ConfigSourceValue::File {
-                path: PathBuf::from("/value")
+                path: PathBuf::from("/value"),
+                factor: None,
             }
         );
 

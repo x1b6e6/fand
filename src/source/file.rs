@@ -9,14 +9,16 @@ use std::{
 
 pub struct SourceFile {
     file: RefCell<File>,
+    factor: f32,
 }
 
 impl SourceFile {
-    pub fn new(path: impl AsRef<Path>) -> Result<Self, io::Error> {
+    pub fn new(path: impl AsRef<Path>, factor: Option<f32>) -> Result<Self, io::Error> {
         let file = File::options().read(true).open(path)?;
         let file = RefCell::new(file);
+        let factor = factor.unwrap_or(1000.0);
 
-        Ok(Self { file })
+        Ok(Self { file, factor })
     }
 }
 
@@ -29,6 +31,6 @@ impl Source for SourceFile {
         let temp = unsafe { std::str::from_utf8_unchecked(&buf) };
         let temp: u32 = temp.parse()?;
 
-        Ok(Temperature::from_celsius(temp as f32 / 1000.0))
+        Ok(Temperature::from_celsius(temp as f32 / self.factor))
     }
 }
