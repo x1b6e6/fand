@@ -5,10 +5,7 @@ use crate::{
 use deno_core::{
     error::AnyError as DenoError, v8, Extension, FastString, JsRuntime, RuntimeOptions,
 };
-use std::{
-    cell::RefCell, collections::HashMap, convert::Infallible, error::Error, mem::MaybeUninit,
-    rc::Rc,
-};
+use std::{cell::RefCell, collections::HashMap, error::Error, mem::MaybeUninit, rc::Rc};
 
 pub struct Computed {
     formula: String,
@@ -141,14 +138,14 @@ pub fn cache_invalidate() {
 }
 
 impl Computed {
-    pub fn new(value: &str, map: Rc<HashMap<String, Rc<dyn Source>>>) -> Result<Self, Infallible> {
+    pub fn new(value: &str, map: Rc<HashMap<String, Rc<dyn Source>>>) -> Self {
         if unsafe { INSTANCE.is_null() } {
             unsafe { INSTANCE.init(map) }
         }
 
         let formula = String::from(value);
 
-        Ok(Self { formula })
+        Self { formula }
     }
 
     pub fn try_compute(&self) -> Result<FanPower, DenoError> {

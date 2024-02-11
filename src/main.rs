@@ -64,7 +64,7 @@ fn main() {
             let target: Rc<RefCell<dyn Fan>> = match target {
                 ConfigFanTarget::Pwm { path } => Rc::new(RefCell::new(FanPwm::new(path).unwrap())),
             };
-            let value = Computed::new(&value, sources.clone()).unwrap();
+            let value = Computed::new(&value, sources.clone());
             (value, target)
         })
         .collect();
