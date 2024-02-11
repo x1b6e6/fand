@@ -117,7 +117,12 @@ impl Sources {
                 }
                 CachedResult::Err(err) => {
                     log::error!("cannot get temperature for {name}: {err:?}");
-                    ret.set_undefined();
+                    let exception = v8::String::new(
+                        scope,
+                        &format!("cannot get temperature for {name}: {err:?}"),
+                    )
+                    .unwrap();
+                    scope.throw_exception(exception.into());
                 }
             }
         }
