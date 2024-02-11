@@ -1,10 +1,10 @@
 use super::{Source, Temperature};
 use dlopen::wrapper::{Container, WrapperApi};
-use std::{error::Error, ffi::CStr, fmt, mem::MaybeUninit, num::NonZeroI32};
+use std::{error::Error, ffi::CStr, fmt, mem::MaybeUninit, num::NonZeroI32, ptr};
 
 #[derive(Clone, Copy)]
 #[repr(C)]
-struct NvidiaDeviceHandle(*const ());
+struct NvidiaDeviceHandle(ptr::NonNull<()>);
 
 #[derive(WrapperApi)]
 pub struct NvidiaApi {
@@ -21,7 +21,8 @@ pub struct NvidiaApi {
     devices_count: fn(count: &mut u32) -> Result<(), NvidiaError>,
 
     #[dlopen_name = "nvmlDeviceGetHandleByIndex_v2"]
-    device_handle_by_index: fn(index: u32, dev: &mut NvidiaDeviceHandle) -> Result<(), NvidiaError>,
+    device_handle_by_index:
+        fn(index: u32, dev: &mut Option<NvidiaDeviceHandle>) -> Result<(), NvidiaError>,
 
     #[dlopen_name = "nvmlDeviceGetUUID"]
     device_get_uuid:
@@ -67,11 +68,13 @@ fn nvidia() -> &'static Nvidia {
             .expect("get nvidia device count");
 
         for index in 0..cnt {
-            let mut handle = NvidiaDeviceHandle::null();
+            let mut handle = None;
             nvidia
                 .api
                 .device_handle_by_index(index, &mut handle)
                 .expect("create device handle");
+
+            let handle = handle.unwrap();
 
             log::info!("Found {handle}");
 
@@ -247,7 +250,7 @@ impl fmt::Display for NvidiaDeviceHandle {
 
 #[cfg(test)]
 mod tests {
-    use super::NvidiaError;
+    use super::{NvidiaDeviceHandle, NvidiaError};
     use std::mem::size_of;
 
     #[test]
@@ -257,6 +260,15 @@ mod tests {
         assert_eq!(
             size_of::<Result<(), NvidiaError>>(),
             size_of::<NvidiaError>()
+        );
+    }
+
+    #[test]
+    fn nvidia_device_handle_sizes() {
+        assert_eq!(size_of::<NvidiaDeviceHandle>(), size_of::<*const ()>());
+        assert_eq!(
+            size_of::<Option<NvidiaDeviceHandle>>(),
+            size_of::<NvidiaDeviceHandle>()
         );
     }
 }
