@@ -125,7 +125,10 @@ impl SourceNvidia {
                 .find_device(|dev| {
                     dev.name().unwrap() == name.as_str() && dev.board_id().unwrap() == *index
                 })
-                .ok_or(SourceNvidiaError::NoDevices),
+                .ok_or_else(|| SourceNvidiaError::NotFound {
+                    name: Some(name.clone()),
+                    index: Some(*index),
+                }),
             (None, Some(index)) => nvidia
                 .find_device(|dev| dev.board_id().unwrap() == *index)
                 .ok_or_else(|| SourceNvidiaError::NotFound {
