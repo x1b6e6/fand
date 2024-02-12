@@ -26,13 +26,7 @@ fn main() {
     signal_handler::init();
 
     let app = cli::App::parse();
-    let path = PathBuf::from_str(
-        app.config
-            .as_ref()
-            .map(String::as_str)
-            .unwrap_or("/etc/fand/config.toml"),
-    )
-    .unwrap();
+    let path = PathBuf::from_str(app.config.as_str()).unwrap();
 
     let Config {
         sources,
