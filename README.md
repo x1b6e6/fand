@@ -6,48 +6,116 @@ Allows using multiple temperature sources for controlling one fan. It's useful f
 
 Allows using complex algorithms for compute fan speed (by using JavaScript)
 
+## Build and run
+
+```shell
+cargo build --release
+sudo ./target/release/fand
+```
+
+## Usage
+
+```
+Usage: fand [OPTIONS]
+
+Options:
+  -c, --config <PATH>  [default: /etc/fand/config.toml]
+  -h, --help           Print help
+```
+
 ## Configuration
 
-example:
+Configuration read from `/etc/fand/config.toml` by default
+
+For working needs at least one `source.XXX` section and at least one `fan` value
+
+---
+
+### `main` section
+
+Base properties:
+
+- `interval` update interval in seconds (`2` by default)
+
+_example:_
 
 ```toml
 [main]
-# update interval in seconds
-# 2 seconds by default
 interval = 5
+```
 
-# register temperature source `myCpu` for getting cpu temperature
+---
+
+### source `file`
+
+Reading temperature from file
+
+Properties:
+
+- `path` path to file for reading. required for `file` type
+- `factor` multiplier for values from file (`0.001` by default)
+
+_example:_
+
+```toml
 [source.myCpu]
-# `file`: just read value from file and divide result by 1000 (standard hwmon format). field is required.
 type = "file"
-
-# by default in `*/hwmon*/temp*_input` values written in 'millicelcius' and must be multiple to 0.001 for getting celsius.
-# 0.001 by default
-factor = 0.001
-
-# path to file for reading. required for `file` type
 path = "/sys/devices/platform/nct6775.656/hwmon/hwmon1/temp13_input"
 
-# register temperature source `myGpu` for getting gpu temperature
+# values in `nct6775` driver written in 'millicelcius' and must be multiplied by 0.001
+factor = 0.001
+```
+
+---
+
+### source `nvidia`
+
+Get temperature from nvidia devices. `libnvidia-ml.so` must be exists in the system
+
+Properties:
+
+- `name` select card by name. optional
+- `uuid` select card by uuid. optional
+
+You can found `name` and `uuid` for all your cards at starting `fand` with correctly configured `nvidia` source section
+
+_log example:_
+
+```log
+[2024-02-11T15:05:18Z INFO  fand::source::nvidia] Found NvidiaDevice { name: "NVIDIA GeForce RTX 5000", uuid: "GPU-23eda959-34a7-4abf-8e19-9c0beded366e" }
+```
+
+_example:_
+
+```toml
 [source.myGpu]
-# `nvidia`: using `libnvidia-ml.so` for getting data from proprietary driver
 type = "nvidia"
-
-# optional filter by device name
-name = "NVIDIA GeForce RTX 4090"
-
-# optional filter by device uuid
+name = "NVIDIA GeForce RTX 5000"
 uuid = "GPU-23eda959-34a7-4abf-8e19-9c0beded366e"
+```
 
-# add fan
+---
+
+### fan `pwm`
+
+Write fan power to file in text format (values in range `0..=255`)
+
+Properties:
+
+- `path` path to pwm file. required for `pwm` type
+- `value` js code for computing result. required for `pwm` type
+
+`value` must return double in range `0.0..=1.0` where `0.0` is power off and `1.0` is full speed
+
+_example:_
+
+```toml
 [[fan]]
-# `pwm`: just write string with result in [0..255] to file
 type = "pwm"
-
-# path to pwm file. required for `pwm`
 path = "/sys/devices/platform/nct6775.656/hwmon/hwmon2/pwm2"
-
-# field for computing power of fan uses JavaScript engine
-# Should produce float value from 0.0 to 1.0 where 0 is power off and 1 is full speed
-value = "Math.max(myCpu, myGpu) / 100"
+value = '''
+    var calc;
+    if (!calc) calc = (minTemp, temp, maxTemp) => Math.min(1, (Math.max(temp, minTemp) - minTemp) / (maxTemp - minTemp) );
+    Math.max(1, calc(30, myCpu, 80), calc(30, myGpu, 40)) // result of last line will be used as power
+'''
 ```
