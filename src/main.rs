@@ -50,6 +50,11 @@ fn main() {
         })
         .collect();
 
+    if sources.is_empty() {
+        log::error!("no sources");
+        panic!("no sources");
+    }
+
     let sources = Rc::new(sources);
 
     let mut fans: Vec<_> = fans
@@ -65,6 +70,11 @@ fn main() {
             (value, target)
         })
         .collect();
+
+    if fans.is_empty() {
+        log::error!("no fans");
+        panic!("no fans");
+    }
 
     loop {
         for (comp, fan) in fans.iter_mut() {
