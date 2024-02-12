@@ -13,7 +13,7 @@ example:
 ```toml
 [main]
 # update interval in seconds
-# 5 seconds by default
+# 2 seconds by default
 interval = 5
 
 # register temperature source `myCpu` for getting cpu temperature
