@@ -38,12 +38,13 @@ fn main() {
         .into_iter()
         .map(|(name, source)| {
             let source: Rc<dyn Source> = match source {
-                ConfigSourceValue::File { path, factor } => {
-                    Rc::new(SourceFile::new(path, factor).unwrap())
-                }
-                ConfigSourceValue::Nvidia { name, uuid } => {
-                    Rc::new(SourceNvidia::new(name, uuid).unwrap())
-                }
+                ConfigSourceValue::File { path, factor } => Rc::new(
+                    SourceFile::new(&path, factor)
+                        .expect(&format!("cant use {path:?} as source file")),
+                ),
+                ConfigSourceValue::Nvidia { name, uuid } => Rc::new(
+                    SourceNvidia::new(name, uuid).expect(&format!("cant use nvidia device")),
+                ),
             };
             (name, source)
         })
@@ -56,7 +57,9 @@ fn main() {
         .map(|fan| {
             let ConfigFan { value, target } = fan;
             let target: Rc<RefCell<dyn Fan>> = match target {
-                ConfigFanTarget::Pwm { path } => Rc::new(RefCell::new(FanPwm::new(path).unwrap())),
+                ConfigFanTarget::Pwm { path } => Rc::new(RefCell::new(
+                    FanPwm::new(&path).expect(&format!("cant use {path:?} as fan pwm")),
+                )),
             };
             let value = Computed::new(&value, sources.clone());
             (value, target)
