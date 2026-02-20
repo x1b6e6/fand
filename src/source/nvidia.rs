@@ -1,6 +1,7 @@
 use super::{Source, Temperature};
 use dlopen::wrapper::{Container, WrapperApi};
 use std::{error::Error, ffi::CStr, fmt, num::NonZeroI32, ptr};
+use thiserror::Error;
 
 #[derive(Clone, Copy)]
 #[repr(C)]
@@ -97,13 +98,16 @@ pub struct SourceNvidia {
 #[derive(Clone, Copy)]
 pub struct NvidiaError(NonZeroI32);
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum SourceNvidiaError {
+    #[error("no devices")]
     NoDevices,
+    #[error("not found {{ name = {name:?}, uuid = {uuid:?} }}")]
     NotFound {
         name: Option<String>,
         uuid: Option<String>,
     },
+    #[error("{0}")]
     Error(NvidiaError),
 }
 
