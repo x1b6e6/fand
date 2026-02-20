@@ -5,9 +5,7 @@ use std::{
     path::{Path, PathBuf},
     time::Duration,
 };
-
-#[derive(Debug, PartialEq, Deserialize)]
-pub struct Milliseconds(u64);
+use thiserror::Error;
 
 #[derive(Debug, PartialEq, Deserialize)]
 #[serde(tag = "type")]
@@ -65,9 +63,11 @@ pub struct Config {
     pub fans: Vec<ConfigFan>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum ConfigReadError {
+    #[error("{0}")]
     Io(io::Error),
+    #[error("{0}")]
     Toml(toml::de::Error),
 }
 
@@ -92,12 +92,6 @@ impl From<io::Error> for ConfigReadError {
 impl From<toml::de::Error> for ConfigReadError {
     fn from(value: toml::de::Error) -> Self {
         ConfigReadError::Toml(value)
-    }
-}
-
-impl Default for Milliseconds {
-    fn default() -> Self {
-        Milliseconds(5000)
     }
 }
 
