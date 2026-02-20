@@ -1,6 +1,6 @@
 use super::{Source, Temperature};
 use dlopen::wrapper::{Container, WrapperApi};
-use std::{error::Error, ffi::CStr, fmt, mem::MaybeUninit, num::NonZeroI32, ptr};
+use std::{error::Error, ffi::CStr, fmt, num::NonZeroI32, ptr};
 
 #[derive(Clone, Copy)]
 #[repr(C)]
@@ -42,47 +42,52 @@ struct Nvidia {
     devices: Vec<NvidiaDeviceHandle>,
 }
 
-fn nvidia() -> &'static Nvidia {
-    static mut NVIDIA: (bool, MaybeUninit<Nvidia>) = (false, MaybeUninit::uninit());
+fn nvidia_init(nvidia: &'static mut Option<Nvidia>) -> &'static Nvidia {
+    assert!(nvidia.is_none());
 
-    let nvidia = unsafe { NVIDIA.1.assume_init_mut() };
+    let api: Container<NvidiaApi> =
+        unsafe { Container::load("libnvidia-ml.so") }.expect("loading libnvidia-ml.so");
 
-    if unsafe { !NVIDIA.0 } {
-        let api: Container<NvidiaApi> =
-            unsafe { Container::load("libnvidia-ml.so") }.expect("loading libnvidia-ml.so");
+    api.init().expect("init nvidia backend");
 
-        api.init().expect("init nvidia backend");
+    *nvidia = Some(Nvidia {
+        api,
+        devices: Vec::new(),
+    });
 
-        unsafe {
-            NVIDIA.0 = true;
-            NVIDIA.1.write(Nvidia {
-                api: api,
-                devices: Vec::new(),
-            })
-        };
+    let nvidia = unsafe { nvidia.as_mut().unwrap_unchecked() };
 
-        let mut cnt = 0;
+    let mut cnt = 0;
+    nvidia
+        .api
+        .devices_count(&mut cnt)
+        .expect("get nvidia device count");
+
+    for index in 0..cnt {
+        let mut handle = None;
         nvidia
             .api
-            .devices_count(&mut cnt)
-            .expect("get nvidia device count");
+            .device_handle_by_index(index, &mut handle)
+            .expect("create device handle");
 
-        for index in 0..cnt {
-            let mut handle = None;
-            nvidia
-                .api
-                .device_handle_by_index(index, &mut handle)
-                .expect("create device handle");
+        let handle = handle.unwrap();
 
-            let handle = handle.unwrap();
+        log::info!("Found {handle}");
 
-            log::info!("Found {handle}");
-
-            nvidia.devices.push(handle);
-        }
+        nvidia.devices.push(handle);
     }
 
-    return nvidia;
+    nvidia
+}
+
+fn nvidia() -> &'static Nvidia {
+    static mut NVIDIA: Option<Nvidia> = None;
+
+    #[allow(static_mut_refs)]
+    match unsafe { NVIDIA.as_ref() } {
+        None => nvidia_init(unsafe { &mut *&raw mut NVIDIA }),
+        Some(nvidia) => nvidia,
+    }
 }
 
 pub struct SourceNvidia {
