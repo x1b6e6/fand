@@ -7,9 +7,6 @@ use std::{
 };
 
 #[derive(Debug, PartialEq, Deserialize)]
-pub struct Milliseconds(u64);
-
-#[derive(Debug, PartialEq, Deserialize)]
 #[serde(tag = "type")]
 pub enum ConfigSourceValue {
     #[serde(rename = "file")]
@@ -92,12 +89,6 @@ impl From<io::Error> for ConfigReadError {
 impl From<toml::de::Error> for ConfigReadError {
     fn from(value: toml::de::Error) -> Self {
         ConfigReadError::Toml(value)
-    }
-}
-
-impl Default for Milliseconds {
-    fn default() -> Self {
-        Milliseconds(5000)
     }
 }
 
