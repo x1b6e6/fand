@@ -5,6 +5,7 @@ use std::{
     path::{Path, PathBuf},
     time::Duration,
 };
+use thiserror::Error;
 
 #[derive(Debug, PartialEq, Deserialize)]
 #[serde(tag = "type")]
@@ -62,9 +63,11 @@ pub struct Config {
     pub fans: Vec<ConfigFan>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum ConfigReadError {
+    #[error("{0}")]
     Io(io::Error),
+    #[error("{0}")]
     Toml(toml::de::Error),
 }
 
