@@ -5,17 +5,11 @@ use crate::{
 use deno_core::{
     error::AnyError as DenoError, v8, Extension, FastString, JsRuntime, RuntimeOptions,
 };
-use std::{cell::RefCell, collections::HashMap, error::Error, mem::MaybeUninit, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, error::Error, rc::Rc};
 
-pub struct Computed {
+pub struct Computed<'a> {
     formula: String,
-}
-
-struct Sources {
-    inited: bool,
-    js: MaybeUninit<JsRuntime>,
-    sources: MaybeUninit<Rc<HashMap<String, Rc<dyn Source>>>>,
-    cache: RefCell<MaybeUninit<HashMap<String, Temperature>>>,
+    engine: &'a ComputeEngine,
 }
 
 enum CachedResult<T, E> {
@@ -24,47 +18,75 @@ enum CachedResult<T, E> {
     Err(E),
 }
 
-static mut INSTANCE: Sources = Sources::null();
+struct EngineStaticValues {
+    sources: HashMap<String, Rc<dyn Source>>,
+    cache: HashMap<String, Temperature>,
+}
 
-impl Sources {
-    pub const fn null() -> Self {
+pub struct ComputeEngine {
+    js: RefCell<JsRuntime>,
+}
+
+static mut ENGINE_STATIC_VALUES: Option<EngineStaticValues> = None;
+
+impl ComputeEngine {
+    pub fn new(sources: HashMap<String, Rc<dyn Source>>) -> Self {
+        #[allow(static_mut_refs)]
+        unsafe {
+            assert!(ENGINE_STATIC_VALUES.is_none())
+        };
+
+        unsafe {
+            ENGINE_STATIC_VALUES = Some(EngineStaticValues {
+                sources,
+                cache: HashMap::new(),
+            })
+        };
+
+        let js = JsRuntime::new(RuntimeOptions {
+            extensions: vec![Extension {
+                global_object_middleware: Some(Self::middleware),
+                ..Default::default()
+            }],
+            ..Default::default()
+        });
+
         Self {
-            inited: false,
-            js: MaybeUninit::uninit(),
-            sources: MaybeUninit::uninit(),
-            cache: RefCell::new(MaybeUninit::uninit()),
+            js: RefCell::new(js),
         }
     }
 
-    pub fn js_mut(&mut self) -> &mut JsRuntime {
-        self.check();
-        unsafe { self.js.assume_init_mut() }
+    fn static_values() -> &'static mut EngineStaticValues {
+        #[allow(static_mut_refs)]
+        unsafe {
+            ENGINE_STATIC_VALUES.as_mut().unwrap()
+        }
     }
 
-    pub fn is_null(&self) -> bool {
-        !self.inited
+    pub fn cache_invalidate(&self) {
+        Self::static_values().cache.clear();
     }
 
-    pub fn cache_invalidate(&mut self) {
-        unsafe { self.cache.borrow_mut().assume_init_mut() }.clear()
+    pub fn create_computed(&self, formula: &str) -> Computed<'_> {
+        Computed {
+            formula: String::from(formula),
+            engine: self,
+        }
     }
 
-    pub fn value(&self, name: &str) -> Option<CachedResult<Temperature, Box<dyn Error>>> {
-        let cache = self.cache.borrow();
-        let cached = unsafe { cache.assume_init_ref() }.get(name);
+    fn value(name: &str) -> Option<CachedResult<Temperature, Box<dyn Error>>> {
+        let cache = &mut Self::static_values().cache;
+        let cached = cache.get(name);
         if let Some(&temperature) = cached {
             return Some(CachedResult::Cached(temperature));
         }
 
-        drop(cache);
-
-        let source = unsafe { self.sources.assume_init_ref() }.get(name);
+        let source = Self::static_values().sources.get(name);
         if let Some(source) = source {
             let result = source.try_get_temperature();
             match result {
                 Ok(temperature) => {
-                    unsafe { self.cache.borrow_mut().assume_init_mut() }
-                        .insert(name.to_string(), temperature);
+                    cache.insert(name.to_string(), temperature);
                     Some(CachedResult::Some(temperature))
                 }
                 Err(err) => Some(CachedResult::Err(err)),
@@ -74,23 +96,11 @@ impl Sources {
         }
     }
 
-    fn check(&self) {
-        if self.is_null() {
-            panic!("not initialized");
+    fn middleware<'s>(scope: &mut v8::HandleScope<'s>, value: v8::Local<'s, v8::Object>) {
+        for (key, _) in &Self::static_values().sources {
+            let name = v8::String::new(scope, key).unwrap();
+            value.set_accessor(scope, name.into(), Self::accessor);
         }
-    }
-
-    fn init(&mut self, map: Rc<HashMap<String, Rc<dyn Source>>>) {
-        self.sources.write(map);
-        self.js.write(JsRuntime::new(RuntimeOptions {
-            extensions: vec![Extension {
-                global_object_middleware: Some(Self::middleware),
-                ..Default::default()
-            }],
-            ..Default::default()
-        }));
-        self.cache.borrow_mut().write(HashMap::new());
-        self.inited = true;
     }
 
     fn accessor<'s>(
@@ -101,7 +111,7 @@ impl Sources {
     ) {
         let name = name.to_rust_string_lossy(scope);
         log::trace!("accessing {name}");
-        let value = unsafe { INSTANCE.value(&name) };
+        let value = Self::value(&name);
         if let Some(value) = value {
             match value {
                 CachedResult::Cached(temperature) => {
@@ -124,32 +134,11 @@ impl Sources {
             }
         }
     }
-
-    fn middleware<'s>(scope: &mut v8::HandleScope<'s>, value: v8::Local<'s, v8::Object>) {
-        for (key, _) in unsafe { INSTANCE.sources.assume_init_ref().as_ref() } {
-            let name = v8::String::new(scope, key).unwrap();
-            value.set_accessor(scope, name.into(), Self::accessor);
-        }
-    }
 }
 
-pub fn cache_invalidate() {
-    unsafe { INSTANCE.cache_invalidate() };
-}
-
-impl Computed {
-    pub fn new(value: &str, map: Rc<HashMap<String, Rc<dyn Source>>>) -> Self {
-        if unsafe { INSTANCE.is_null() } {
-            unsafe { INSTANCE.init(map) }
-        }
-
-        let formula = String::from(value);
-
-        Self { formula }
-    }
-
+impl<'a> Computed<'a> {
     pub fn try_compute(&self) -> Result<FanPower, DenoError> {
-        let js = unsafe { INSTANCE.js_mut() };
+        let mut js = self.engine.js.borrow_mut();
         let result = js.execute_script(
             "[computed.rs:runtime.js]",
             FastString::Owned(Box::from(self.formula.as_str())),

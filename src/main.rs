@@ -7,7 +7,7 @@ use crate::{
     source::{Source, SourceFile, SourceNvidia},
 };
 use clap::Parser as _;
-use computed::Computed;
+use computed::ComputeEngine;
 use config::{ConfigFan, ConfigMain};
 use std::{cell::RefCell, collections::HashMap, env, path::PathBuf, rc::Rc, str::FromStr as _};
 
@@ -55,7 +55,7 @@ fn main() {
         panic!("no sources");
     }
 
-    let sources = Rc::new(sources);
+    let engine = ComputeEngine::new(sources);
 
     let mut fans: Vec<_> = fans
         .into_iter()
@@ -66,7 +66,7 @@ fn main() {
                     FanPwm::new(&path).expect(&format!("cant use {path:?} as fan pwm")),
                 )),
             };
-            let value = Computed::new(&value, sources.clone());
+            let value = engine.create_computed(&value);
             (value, target)
         })
         .collect();
@@ -88,6 +88,6 @@ fn main() {
             }
         }
         std::thread::sleep(interval);
-        computed::cache_invalidate();
+        engine.cache_invalidate();
     }
 }
